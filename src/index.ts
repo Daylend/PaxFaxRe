@@ -1,10 +1,13 @@
-import { Client, GatewayIntentBits, Events, Message, Collection } from 'discord.js';
+import { Client, GatewayIntentBits, Events, Message, Collection, ApplicationCommandData } from 'discord.js';
 import { REST } from '@discordjs/rest';
+import { SlashCommandBuilder } from '@discordjs/builders';
 import { Routes } from 'discord-api-types/v9';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import chokidar from 'chokidar';
+import { readdirSync, statSync } from 'fs';
+import { join } from 'path';
 
 dotenv.config();
 
@@ -21,6 +24,11 @@ const client: ExtendedClient = new Client({
   ],
 }) as ExtendedClient;
 
+interface Command {
+  data: SlashCommandBuilder;
+  execute: (interaction: any) => Promise<void>;
+}
+
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 
@@ -31,28 +39,33 @@ if (!TOKEN || !CLIENT_ID) {
 
 client.commands = new Collection();
 
-const loadCommands = () => {
-  const commands = [];
-  const commandsPath = path.join(__dirname, 'commands');
-  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.ts'));
+const loadCommands = (directory: string): ApplicationCommandData[] => {
+  let commands: ApplicationCommandData[] = [];
+  const files = readdirSync(directory);
 
-  for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
-    if ('data' in command && 'execute' in command) {
-      client.commands.set(command.data.name, command);
-      commands.push(command.data.toJSON());
-      console.log(`Loaded command: ${command.data.name}`);
-    } else {
-      console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+  for (const file of files) {
+    const filePath = join(directory, file);
+    if (statSync(filePath).isDirectory()) {
+      commands = commands.concat(loadCommands(filePath)); // Recursively load commands
+    } else if (file.endsWith('.ts')) {
+      const command: Command = require(filePath);
+      if ('data' in command && 'execute' in command) {
+        client.commands.set(command.data.name, command);
+        commands.push(command.data.toJSON() as ApplicationCommandData);
+        console.log(`Loaded command: ${command.data.name}`);
+      } else {
+        console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+      }
     }
   }
 
   return commands;
 };
 
+// Initialize command loading and deployment
 const deployCommands = async () => {
-  const commands = loadCommands();
+  const commandsPath = join(__dirname, 'commands');
+  const commands = loadCommands(commandsPath);
   const rest = new REST({ version: '9' }).setToken(TOKEN);
 
   try {

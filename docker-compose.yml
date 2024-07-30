@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  discord-bot:
+  paxfax:
     build:
       context: .
       target: development
