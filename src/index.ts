@@ -31,6 +31,11 @@ interface Command {
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
+const APOC_SERVER_ID = process.env.APOC_SERVER_ID;
+const NODE_ENV = process.env.NODE_ENV || 'production';
+const DEBUG_MODE = NODE_ENV === 'development';
+
+console.log(`Running in ${NODE_ENV} mode.`);
 
 if (!TOKEN || !CLIENT_ID) {
   console.error('Missing DISCORD_TOKEN or CLIENT_ID in .env file');
@@ -71,14 +76,24 @@ const deployCommands = async () => {
   try {
     console.log('Started refreshing application (/) commands.');
 
-    await rest.put(
-      Routes.applicationCommands(CLIENT_ID),
-      { body: commands },
-    );
-
-    console.log('Successfully reloaded application (/) commands.');
+    // Check if the bot is in debug mode
+    if (DEBUG_MODE && APOC_SERVER_ID) {
+      // Deploy commands to a specific guild only
+      await rest.put(
+        Routes.applicationGuildCommands(CLIENT_ID, APOC_SERVER_ID),
+        { body: commands }
+      );
+      console.log('Successfully reloaded application (/) commands for guild:', APOC_SERVER_ID);
+    } else {
+      // Deploy commands globally
+      await rest.put(
+        Routes.applicationCommands(CLIENT_ID),
+        { body: commands }
+      );
+      console.log('Successfully reloaded application (/) commands globally.');
+    }
   } catch (error) {
-    console.error(error);
+    console.error('Failed to deploy commands:', error);
   }
 };
 
