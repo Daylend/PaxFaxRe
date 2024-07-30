@@ -29,7 +29,7 @@ module.exports = {
     const category = interaction.options.get('category')?.value as string;
     const message = interaction.options.get('message')?.value as string;
 
-    const responsesPath = path.join(__dirname, '..', 'responses.json');
+    const responsesPath = path.join(__dirname, '..', 'data', 'responses.json');
     const data = fs.existsSync(responsesPath) ? JSON.parse(fs.readFileSync(responsesPath, 'utf8')) : { insult: [], blab: [] };
 
     if (!data[category]) {

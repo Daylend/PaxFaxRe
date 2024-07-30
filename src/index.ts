@@ -1,10 +1,10 @@
-
 import { Client, GatewayIntentBits, Events, Message, Collection } from 'discord.js';
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v9';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import chokidar from 'chokidar';
 
 dotenv.config();
 
@@ -29,7 +29,6 @@ if (!TOKEN || !CLIENT_ID) {
   process.exit(1);
 }
 
-// Initialize the commands collection
 client.commands = new Collection();
 
 const loadCommands = () => {
@@ -43,6 +42,7 @@ const loadCommands = () => {
     if ('data' in command && 'execute' in command) {
       client.commands.set(command.data.name, command);
       commands.push(command.data.toJSON());
+      console.log(`Loaded command: ${command.data.name}`);
     } else {
       console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
     }
@@ -73,13 +73,19 @@ const deployCommands = async () => {
 deployCommands();
 
 // Watch for changes in the commands directory
-const commandsPath = path.join(__dirname, 'commands');
-fs.watch(commandsPath, (eventType, filename) => {
-  if (filename) {
-    console.log(`Detected ${eventType} in file ${filename}. Redeploying commands...`);
-    deployCommands();
-  }
+const commandsWatcher = chokidar.watch(path.join(__dirname, 'commands'), {
+  ignored: /(^|[\/\\])\../, // ignore dotfiles
+  persistent: true,
+  usePolling: true, // use polling instead of native file watchers
+  interval: 1000, // check for changes every 100 milliseconds
 });
+
+
+commandsWatcher
+  .on('change', path => {
+    console.log(`Detected change in file ${path}. Redeploying commands...`);
+    deployCommands();
+  });
 
 client.on(Events.ClientReady, () => {
   console.log(`Logged in as ${client.user?.tag}!`);
@@ -107,7 +113,7 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 });
 
-const responsesPath = path.join(__dirname, 'responses.json');
+const responsesPath = path.join(__dirname, 'data', 'responses.json');
 
 // Load or initialize the responses JSON file
 const loadResponses = () => {

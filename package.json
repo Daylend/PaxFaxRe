@@ -6,12 +6,13 @@
   "scripts": {
     "start": "node dist/index.js",
     "build": "tsc",
-    "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
+    "dev": "nodemon --watch 'src/**/*' -e ts,js,json --exec ts-node src/index.ts",
     "docker:dev": "docker-compose up --build"
   },
   "dependencies": {
     "@discordjs/builders": "^1.6.3",
     "@discordjs/rest": "^1.7.1",
+    "chokidar": "^3.6.0",
     "discord-api-types": "^0.37.42",
     "discord.js": "^14.11.0",
     "dotenv": "^16.0.3"
