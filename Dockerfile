@@ -13,7 +13,7 @@ RUN npm install
 COPY . .
 
 # Build the TypeScript code
-RUN npm run build
+RUN npm run build || (echo "Build failed. Check the errors above." && exit 1)
 
 # Command to run the app in development mode
 CMD ["npm", "run", "dev"]

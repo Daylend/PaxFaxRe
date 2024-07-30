@@ -1,15 +1,25 @@
-import { Client, GatewayIntentBits, Events, Message, REST, Routes } from 'discord.js';
+
+import { Client, GatewayIntentBits, Events, Message, Collection } from 'discord.js';
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/v9';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
-const client = new Client({
+interface ExtendedClient extends Client {
+  commands: Collection<string, any>;
+  responses: { insult: string[]; blab: string[] };
+}
+
+const client: ExtendedClient = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
-});
+}) as ExtendedClient;
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -19,44 +29,112 @@ if (!TOKEN || !CLIENT_ID) {
   process.exit(1);
 }
 
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+// Initialize the commands collection
+client.commands = new Collection();
 
-// Define your app commands here
-const commands = [
-  {
-    name: 'ping',
-    description: 'Replies with Pong!',
-  },
-];
+const loadCommands = () => {
+  const commands = [];
+  const commandsPath = path.join(__dirname, 'commands');
+  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.ts'));
 
-// Register app commands
-(async () => {
+  for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    const command = require(filePath);
+    if ('data' in command && 'execute' in command) {
+      client.commands.set(command.data.name, command);
+      commands.push(command.data.toJSON());
+    } else {
+      console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+    }
+  }
+
+  return commands;
+};
+
+const deployCommands = async () => {
+  const commands = loadCommands();
+  const rest = new REST({ version: '9' }).setToken(TOKEN);
+
   try {
     console.log('Started refreshing application (/) commands.');
-    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+
+    await rest.put(
+      Routes.applicationCommands(CLIENT_ID),
+      { body: commands },
+    );
+
     console.log('Successfully reloaded application (/) commands.');
   } catch (error) {
     console.error(error);
   }
-})();
+};
+
+// Automatically deploy commands on startup
+deployCommands();
+
+// Watch for changes in the commands directory
+const commandsPath = path.join(__dirname, 'commands');
+fs.watch(commandsPath, (eventType, filename) => {
+  if (filename) {
+    console.log(`Detected ${eventType} in file ${filename}. Redeploying commands...`);
+    deployCommands();
+  }
+});
 
 client.on(Events.ClientReady, () => {
   console.log(`Logged in as ${client.user?.tag}!`);
 });
 
-client.on(Events.InteractionCreate, async (interaction) => {
+client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isCommand()) return;
 
-  const { commandName } = interaction;
+  const command = client.commands.get(interaction.commandName);
 
-  if (commandName === 'ping') {
-    await interaction.reply('Pong!');
+  if (!command) {
+    console.error(`No command matching ${interaction.commandName} was found.`);
+    return;
+  }
+
+  try {
+    await command.execute(interaction);
+  } catch (error) {
+    console.error(error);
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
+    } else {
+      await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+    }
   }
 });
 
+const responsesPath = path.join(__dirname, 'responses.json');
+
+// Load or initialize the responses JSON file
+const loadResponses = () => {
+  try {
+    if (fs.existsSync(responsesPath)) {
+      const data = fs.readFileSync(responsesPath, 'utf8');
+      client.responses = JSON.parse(data);
+    } else {
+      // Initialize with empty arrays if the file does not exist
+      fs.writeFileSync(responsesPath, JSON.stringify({ insult: [], blab: [] }, null, 2));
+      client.responses = { insult: [], blab: [] };
+    }
+  } catch (error) {
+    console.error('Failed to load or initialize the responses file:', error);
+    process.exit(1);
+  }
+};
+
+loadResponses();
+
 client.on(Events.MessageCreate, (message: Message) => {
   if (message.mentions.has(client.user!.id)) {
-    message.reply('Hello! I noticed you mentioned me.');
+    // Randomly choose to insult or blab
+    const responseType = Math.random() < 0.9 ? 'insult' : 'blab';
+    const responses = client.responses[responseType];
+    const response = responses[Math.floor(Math.random() * responses.length)] || "I'm at a loss for words!";
+    message.reply(response);
   }
 });
 
