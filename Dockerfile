@@ -29,8 +29,11 @@ COPY package*.json ./
 # Install only production dependencies
 RUN npm ci --only=production
 
-# Copy built JavaScript files from development stage
+# Copy built JavaScript files from the development stage
 COPY --from=development /usr/src/app/dist ./dist
 
-# Command to run the app
+# Copy data
+COPY --from=development /usr/src/app/src/data ./dist/data
+
+# Command to run the app in production mode
 CMD ["node", "dist/index.js"]

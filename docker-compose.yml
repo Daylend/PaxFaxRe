@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+
+  paxfax-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    env_file: .env
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+
+  paxfax-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    env_file: .env
+    command: npm start
+    environment:
+      - NODE_ENV=production
