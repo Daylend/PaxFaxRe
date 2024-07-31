@@ -108,7 +108,6 @@ const commandsWatcher = chokidar.watch(path.join(__dirname, 'commands'), {
   interval: 1000, // check for changes every 100 milliseconds
 });
 
-
 commandsWatcher
   .on('change', path => {
     console.log(`Detected change in file ${path}. Redeploying commands...`);
